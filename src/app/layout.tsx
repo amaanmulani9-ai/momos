@@ -1,14 +1,8 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Outfit, Playfair_Display } from 'next/font/google';
-import './globals.css';
+import '@/app/globals.css';
+import AppChrome from '@/components/AppChrome';
 import { CartProvider } from '@/lib/store';
-import Navbar from '@/components/Navbar';
-import CartDrawer from '@/components/CartDrawer';
-import WhatsAppButton from '@/components/WhatsAppButton';
-import AIChatBot from '@/components/AIChatBot';
-import BottomNav from '@/components/BottomNav';
-import LiveOrders from '@/components/LiveOrders';
-import SpinWheel from '@/components/SpinWheel';
 
 const outfit = Outfit({
   subsets: ['latin'],
@@ -24,15 +18,25 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: "Meghna's Momos — Handcrafted Dumplings Delivered Fresh",
+  title: "Meghna's Momos | Dark Kitchen Delivery",
   description:
-    "Order the freshest steam, fried, and kurkure momos in Noida. Veg & non-veg options. Fast delivery. Order on WhatsApp or online.",
-  keywords: 'momos, dumplings, noida, food delivery, street food, veg momos, chicken momos',
+    'Premium momos, noodles, pizza, and comfort food delivered fast with WhatsApp-friendly ordering.',
+  manifest: '/manifest.webmanifest',
+  applicationName: "Meghna's Momos",
+  appleWebApp: {
+    capable: true,
+    title: "Meghna's Momos",
+    statusBarStyle: 'black-translucent',
+  },
   openGraph: {
     title: "Meghna's Momos",
-    description: 'Handcrafted Dumplings Delivered Fresh',
+    description: 'Premium comfort food delivery with a mobile-first ordering flow.',
     type: 'website',
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#080a10',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -40,16 +44,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${outfit.variable} ${playfair.variable}`}>
       <body>
         <CartProvider>
-          <Navbar />
-          <CartDrawer />
-          <main className="pb-16">{children}</main>
-          <BottomNav />
-          <LiveOrders />
-          <SpinWheel />
-          <WhatsAppButton />
-          <AIChatBot />
+          <AppChrome>{children}</AppChrome>
         </CartProvider>
       </body>
     </html>
   );
 }
+

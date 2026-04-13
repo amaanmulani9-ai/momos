@@ -1,57 +1,77 @@
 'use client';
 
-import { createContext, useContext, useReducer, useCallback, useEffect } from 'react';
-import type { Product } from './data';
-import { SHOP_INFO } from './data';
+import { createContext, useCallback, useContext, useEffect, useReducer, useRef } from 'react';
+import {
+  fallbackSettings,
+  type OrderRecord,
+  type ProductDetail,
+} from '@/lib/customer-data';
 
-export interface CartItem { product: Product; quantity: number; }
-
-// ── Coupon codes ──
-export const COUPONS: Record<string, { discount: number; type: 'percent' | 'flat'; label: string }> = {
-  'NEW50':   { discount: 50, type: 'percent', label: '50% off (max ₹100)' },
-  'FREEDEL': { discount: 30, type: 'flat',    label: 'Free Delivery' },
-  'WEEKEND': { discount: 20, type: 'percent', label: '20% off on all orders' },
-  'MOMOS10': { discount: 10, type: 'flat',    label: '₹10 off on momos' },
-  'FIRST':   { discount: 30, type: 'flat',    label: '₹30 off on first order' },
-};
-
-export function applyCoupon(code: string, subtotal: number): { valid: boolean; savings: number; message: string } {
-  const c = COUPONS[code.toUpperCase()];
-  if (!c) return { valid: false, savings: 0, message: 'Invalid coupon code' };
-  if (subtotal < 50) return { valid: false, savings: 0, message: 'Min order ₹50 required' };
-  let savings = c.type === 'percent'
-    ? Math.min(Math.round((subtotal * c.discount) / 100), code === 'NEW50' ? 100 : 9999)
-    : c.discount;
-  return { valid: true, savings, message: `${c.label} applied! ✅` };
+export interface CartItem {
+  product: ProductDetail;
+  quantity: number;
 }
 
-interface CartState {
+export interface SavedAddress {
+  label: string;
+  area: string;
+  address: string;
+  placeId?: string;
+  lat?: number;
+  lng?: number;
+}
+
+export const COUPONS: Record<string, { discount: number; type: 'percent' | 'flat'; label: string; cap?: number }> = {
+  NEW50: { discount: 50, type: 'percent', label: '50% off on your first order', cap: 100 },
+  FREEDEL: { discount: fallbackSettings.deliveryFee, type: 'flat', label: 'Free delivery offer' },
+  WEEKEND: { discount: 20, type: 'percent', label: '20% weekend savings' },
+  MOMOS10: { discount: 10, type: 'flat', label: 'Flat Rs.10 off' },
+};
+
+export function applyCoupon(code: string, subtotal: number, deliveryFeeForOffers = fallbackSettings.deliveryFee) {
+  const upper = code.toUpperCase();
+  const coupon = COUPONS[upper];
+  if (!coupon) {
+    return { valid: false, savings: 0, message: 'Invalid coupon code' };
+  }
+
+  if (subtotal < 100) {
+    return { valid: false, savings: 0, message: 'Minimum order is Rs.100' };
+  }
+
+  let savings =
+    upper === 'FREEDEL'
+      ? deliveryFeeForOffers
+      : coupon.type === 'percent'
+        ? Math.round((subtotal * coupon.discount) / 100)
+        : coupon.discount;
+
+  if (coupon.cap && upper !== 'FREEDEL') {
+    savings = Math.min(savings, coupon.cap);
+  }
+
+  return {
+    valid: true,
+    savings,
+    message: `${coupon.label} applied`,
+  };
+}
+
+interface CustomerState {
   items: CartItem[];
   isOpen: boolean;
   coupon: string;
   couponSavings: number;
-  wishlist: string[];   // product IDs
-  recentOrders: RecentOrder[];
+  wishlist: string[];
+  recentOrders: OrderRecord[];
   address: SavedAddress | null;
   userName: string;
+  userPhone: string;
 }
 
-export interface RecentOrder {
-  id: string;
-  date: string;
-  items: Array<{ name: string; quantity: number; price: number }>;
-  total: number;
-  status: 'delivered' | 'cancelled' | 'processing';
-}
-
-export interface SavedAddress {
-  area: string;
-  address: string;
-  label: string;
-}
-
-type CartAction =
-  | { type: 'ADD_ITEM'; product: Product }
+type CustomerAction =
+  | { type: 'HYDRATE'; state: Partial<CustomerState> }
+  | { type: 'ADD_ITEM'; product: ProductDetail }
   | { type: 'REMOVE_ITEM'; productId: string }
   | { type: 'UPDATE_QUANTITY'; productId: string; quantity: number }
   | { type: 'CLEAR_CART' }
@@ -61,30 +81,70 @@ type CartAction =
   | { type: 'APPLY_COUPON'; code: string; savings: number }
   | { type: 'REMOVE_COUPON' }
   | { type: 'TOGGLE_WISHLIST'; productId: string }
-  | { type: 'ADD_ORDER'; order: RecentOrder }
+  | { type: 'ADD_ORDER'; order: OrderRecord }
   | { type: 'SET_ADDRESS'; address: SavedAddress }
   | { type: 'SET_USER_NAME'; name: string }
-  | { type: 'HYDRATE'; state: Partial<CartState> };
+  | { type: 'SET_USER_PHONE'; phone: string };
 
-function cartReducer(state: CartState, action: CartAction): CartState {
+const STORAGE_KEY = 'momos-marketplace-v1';
+
+const INITIAL_STATE: CustomerState = {
+  items: [],
+  isOpen: false,
+  coupon: '',
+  couponSavings: 0,
+  wishlist: [],
+  recentOrders: [],
+  address: null,
+  userName: '',
+  userPhone: '',
+};
+
+function reducer(state: CustomerState, action: CustomerAction): CustomerState {
   switch (action.type) {
+    case 'HYDRATE': {
+      const incoming = { ...action.state };
+      if (incoming.items?.length) {
+        incoming.items = incoming.items.filter((row) => Boolean(row.product?.restaurantId));
+      }
+      return { ...state, ...incoming, isOpen: false };
+    }
     case 'ADD_ITEM': {
-      const existing = state.items.find(i => i.product.id === action.product.id);
+      const existingItem = state.items.find((item) => item.product.id === action.product.id);
       return {
         ...state,
-        items: existing
-          ? state.items.map(i => i.product.id === action.product.id ? { ...i, quantity: i.quantity + 1 } : i)
+        items: existingItem
+          ? state.items.map((item) =>
+              item.product.id === action.product.id
+                ? { ...item, quantity: item.quantity + 1 }
+                : item,
+            )
           : [...state.items, { product: action.product, quantity: 1 }],
-        isOpen: true,
       };
     }
     case 'REMOVE_ITEM':
-      return { ...state, items: state.items.filter(i => i.product.id !== action.productId) };
+      return {
+        ...state,
+        items: state.items.filter((item) => item.product.id !== action.productId),
+      };
     case 'UPDATE_QUANTITY':
-      if (action.quantity <= 0) return { ...state, items: state.items.filter(i => i.product.id !== action.productId) };
-      return { ...state, items: state.items.map(i => i.product.id === action.productId ? { ...i, quantity: action.quantity } : i) };
+      return {
+        ...state,
+        items: action.quantity <= 0
+          ? state.items.filter((item) => item.product.id !== action.productId)
+          : state.items.map((item) =>
+              item.product.id === action.productId
+                ? { ...item, quantity: action.quantity }
+                : item,
+            ),
+      };
     case 'CLEAR_CART':
-      return { ...state, items: [], coupon: '', couponSavings: 0 };
+      return {
+        ...state,
+        items: [],
+        coupon: '',
+        couponSavings: 0,
+      };
     case 'TOGGLE_CART':
       return { ...state, isOpen: !state.isOpen };
     case 'OPEN_CART':
@@ -95,32 +155,44 @@ function cartReducer(state: CartState, action: CartAction): CartState {
       return { ...state, coupon: action.code, couponSavings: action.savings };
     case 'REMOVE_COUPON':
       return { ...state, coupon: '', couponSavings: 0 };
-    case 'TOGGLE_WISHLIST': {
-      const has = state.wishlist.includes(action.productId);
-      return { ...state, wishlist: has ? state.wishlist.filter(id => id !== action.productId) : [...state.wishlist, action.productId] };
-    }
+    case 'TOGGLE_WISHLIST':
+      return {
+        ...state,
+        wishlist: state.wishlist.includes(action.productId)
+          ? state.wishlist.filter((id) => id !== action.productId)
+          : [...state.wishlist, action.productId],
+      };
     case 'ADD_ORDER':
-      return { ...state, recentOrders: [action.order, ...state.recentOrders].slice(0, 20) };
+      return {
+        ...state,
+        recentOrders: [action.order, ...state.recentOrders.filter((order) => order.id !== action.order.id)].slice(0, 20),
+      };
     case 'SET_ADDRESS':
       return { ...state, address: action.address };
     case 'SET_USER_NAME':
       return { ...state, userName: action.name };
-    case 'HYDRATE':
-      return { ...state, ...action.state };
+    case 'SET_USER_PHONE':
+      return { ...state, userPhone: action.phone };
     default:
       return state;
   }
 }
 
-const INITIAL: CartState = {
-  items: [], isOpen: false, coupon: '', couponSavings: 0,
-  wishlist: [], recentOrders: [], address: null, userName: '',
-};
-
-interface CartContextValue {
+interface CustomerContextValue {
   items: CartItem[];
   isOpen: boolean;
-  addItem: (product: Product) => void;
+  coupon: string;
+  couponSavings: number;
+  wishlist: string[];
+  recentOrders: OrderRecord[];
+  address: SavedAddress | null;
+  userName: string;
+  userPhone: string;
+  itemCount: number;
+  subtotal: number;
+  deliveryFee: number;
+  total: number;
+  addItem: (product: ProductDetail) => void;
   removeItem: (productId: string) => void;
   updateQuantity: (productId: string, quantity: number) => void;
   clearCart: () => void;
@@ -130,46 +202,70 @@ interface CartContextValue {
   applyCouponCode: (code: string) => { valid: boolean; message: string };
   removeCoupon: () => void;
   toggleWishlist: (productId: string) => void;
-  addOrder: (order: RecentOrder) => void;
+  addOrder: (order: OrderRecord) => void;
+  getRecentOrderById: (orderId: string) => OrderRecord | undefined;
   setAddress: (address: SavedAddress) => void;
   setUserName: (name: string) => void;
-  itemCount: number;
-  subtotal: number;
-  couponSavings: number;
-  coupon: string;
-  deliveryFee: number;
-  total: number;
-  wishlist: string[];
-  recentOrders: RecentOrder[];
-  address: SavedAddress | null;
-  userName: string;
+  setUserPhone: (phone: string) => void;
 }
 
-const CartContext = createContext<CartContextValue | null>(null);
-const STORAGE_KEY = 'meghna_kitchen_state';
+const CustomerContext = createContext<CustomerContextValue | null>(null);
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [state, dispatch] = useReducer(cartReducer, INITIAL);
+  const [state, dispatch] = useReducer(reducer, INITIAL_STATE);
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
-  // Persist to localStorage
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved) as Partial<CartState>;
-        dispatch({ type: 'HYDRATE', state: { ...parsed, isOpen: false } });
+      const savedState = localStorage.getItem(STORAGE_KEY);
+      if (savedState) {
+        dispatch({ type: 'HYDRATE', state: JSON.parse(savedState) as Partial<CustomerState> });
+        return;
       }
-    } catch {}
+      const legacy = localStorage.getItem('momos-customer-state');
+      if (legacy) {
+        const parsed = JSON.parse(legacy) as Partial<CustomerState>;
+        if (parsed.items?.length && parsed.items.some((row) => !row.product?.restaurantId)) {
+          dispatch({ type: 'HYDRATE', state: { ...parsed, items: [] } });
+        } else {
+          dispatch({ type: 'HYDRATE', state: parsed });
+        }
+      }
+    } catch {
+      // Ignore malformed local storage state and continue with defaults.
+    }
   }, []);
 
   useEffect(() => {
     try {
-      const { isOpen, ...rest } = state;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(rest));
-    } catch {}
+      const { isOpen, ...persistedState } = state;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(persistedState));
+    } catch {
+      // Ignore storage failures.
+    }
   }, [state]);
 
-  const addItem = useCallback((product: Product) => dispatch({ type: 'ADD_ITEM', product }), []);
+  const addItem = useCallback((product: ProductDetail) => {
+    const current = stateRef.current;
+    const first = current.items[0];
+    if (
+      first &&
+      product.restaurantId &&
+      first.product.restaurantId !== product.restaurantId
+    ) {
+      const ok =
+        typeof window !== 'undefined' &&
+        window.confirm(
+          'Your cart has items from another restaurant. Clear the cart and add dishes from this one?',
+        );
+      if (!ok) {
+        return;
+      }
+      dispatch({ type: 'CLEAR_CART' });
+    }
+    dispatch({ type: 'ADD_ITEM', product });
+  }, []);
   const removeItem = useCallback((productId: string) => dispatch({ type: 'REMOVE_ITEM', productId }), []);
   const updateQuantity = useCallback((productId: string, quantity: number) => dispatch({ type: 'UPDATE_QUANTITY', productId, quantity }), []);
   const clearCart = useCallback(() => dispatch({ type: 'CLEAR_CART' }), []);
@@ -178,38 +274,90 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const closeCart = useCallback(() => dispatch({ type: 'CLOSE_CART' }), []);
   const removeCoupon = useCallback(() => dispatch({ type: 'REMOVE_COUPON' }), []);
   const toggleWishlist = useCallback((productId: string) => dispatch({ type: 'TOGGLE_WISHLIST', productId }), []);
-  const addOrder = useCallback((order: RecentOrder) => dispatch({ type: 'ADD_ORDER', order }), []);
+  const addOrder = useCallback((order: OrderRecord) => dispatch({ type: 'ADD_ORDER', order }), []);
   const setAddress = useCallback((address: SavedAddress) => dispatch({ type: 'SET_ADDRESS', address }), []);
   const setUserName = useCallback((name: string) => dispatch({ type: 'SET_USER_NAME', name }), []);
+  const setUserPhone = useCallback((phone: string) => dispatch({ type: 'SET_USER_PHONE', phone }), []);
 
-  const applyCouponCode = useCallback((code: string) => {
-    const subtotal = state.items.reduce((s, i) => s + i.product.price * i.quantity, 0);
-    const result = applyCoupon(code, subtotal);
-    if (result.valid) dispatch({ type: 'APPLY_COUPON', code: code.toUpperCase(), savings: result.savings });
-    return { valid: result.valid, message: result.message };
-  }, [state.items]);
+  const applyCouponCode = useCallback(
+    (code: string) => {
+      const subtotal = state.items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+      const deliveryForOffer =
+        state.items[0]?.product.restaurantDeliveryFee ?? fallbackSettings.deliveryFee;
+      const result = applyCoupon(code, subtotal, deliveryForOffer);
+      if (result.valid) {
+        dispatch({ type: 'APPLY_COUPON', code: code.toUpperCase(), savings: result.savings });
+      }
+      return {
+        valid: result.valid,
+        message: result.message,
+      };
+    },
+    [state.items],
+  );
 
-  const itemCount = state.items.reduce((sum, i) => sum + i.quantity, 0);
-  const subtotal = state.items.reduce((sum, i) => sum + i.product.price * i.quantity, 0);
-  const deliveryFee = subtotal >= SHOP_INFO.freeDeliveryAbove ? 0 : state.couponSavings > 0 && state.coupon === 'FREEDEL' ? 0 : (subtotal > 0 ? SHOP_INFO.deliveryFee : 0);
+  const itemCount = state.items.reduce((sum, item) => sum + item.quantity, 0);
+  const subtotal = state.items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+  const freeDeliveryAbove =
+    state.items[0]?.product.restaurantFreeDeliveryAbove ?? fallbackSettings.freeDeliveryAbove;
+  const lineDeliveryFee =
+    state.items[0]?.product.restaurantDeliveryFee ?? fallbackSettings.deliveryFee;
+  const deliveryFee =
+    subtotal === 0
+      ? 0
+      : state.coupon === 'FREEDEL' || subtotal >= freeDeliveryAbove
+        ? 0
+        : lineDeliveryFee;
   const total = Math.max(0, subtotal + deliveryFee - state.couponSavings);
 
+  const getRecentOrderById = useCallback(
+    (orderId: string) => state.recentOrders.find((order) => order.id === orderId),
+    [state.recentOrders],
+  );
+
   return (
-    <CartContext.Provider value={{
-      items: state.items, isOpen: state.isOpen,
-      addItem, removeItem, updateQuantity, clearCart, toggleCart, openCart, closeCart,
-      applyCouponCode, removeCoupon, toggleWishlist, addOrder, setAddress, setUserName,
-      itemCount, subtotal, couponSavings: state.couponSavings, coupon: state.coupon,
-      deliveryFee, total, wishlist: state.wishlist, recentOrders: state.recentOrders,
-      address: state.address, userName: state.userName,
-    }}>
+    <CustomerContext.Provider
+      value={{
+        items: state.items,
+        isOpen: state.isOpen,
+        coupon: state.coupon,
+        couponSavings: state.couponSavings,
+        wishlist: state.wishlist,
+        recentOrders: state.recentOrders,
+        address: state.address,
+        userName: state.userName,
+        userPhone: state.userPhone,
+        itemCount,
+        subtotal,
+        deliveryFee,
+        total,
+        addItem,
+        removeItem,
+        updateQuantity,
+        clearCart,
+        toggleCart,
+        openCart,
+        closeCart,
+        applyCouponCode,
+        removeCoupon,
+        toggleWishlist,
+        addOrder,
+        getRecentOrderById,
+        setAddress,
+        setUserName,
+        setUserPhone,
+      }}
+    >
       {children}
-    </CartContext.Provider>
+    </CustomerContext.Provider>
   );
 }
 
 export function useCart() {
-  const ctx = useContext(CartContext);
-  if (!ctx) throw new Error('useCart must be used inside CartProvider');
-  return ctx;
+  const context = useContext(CustomerContext);
+  if (!context) {
+    throw new Error('useCart must be used inside CartProvider');
+  }
+  return context;
 }
+

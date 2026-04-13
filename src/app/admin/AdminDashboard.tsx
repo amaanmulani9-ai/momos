@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { ShoppingBag, Package, TrendingUp, CheckCircle, Clock, XCircle, RefreshCw } from 'lucide-react';
+import { ShoppingBag, Package, TrendingUp, CheckCircle, Clock, XCircle, RefreshCw, Store, Megaphone, Users, LifeBuoy } from 'lucide-react';
 
 interface Order {
   id: string;
@@ -15,6 +15,18 @@ interface Order {
   notes: string;
   created_at: string;
   order_items?: Array<{ product_name: string; quantity: number; item_price: number }>;
+}
+
+interface AdminOverviewResponse {
+  metrics: {
+    restaurants: number;
+    products: number;
+    openOrders: number;
+    revenue: number;
+  };
+  restaurants: Array<Record<string, unknown>>;
+  products: Array<Record<string, unknown>>;
+  support: Array<Record<string, unknown>>;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -35,15 +47,26 @@ const STATUS_ICONS: Record<string, React.ComponentType<{ className?: string }>> 
 
 export default function AdminDashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [overview, setOverview] = useState<AdminOverviewResponse>({
+    metrics: { restaurants: 0, products: 0, openOrders: 0, revenue: 0 },
+    restaurants: [],
+    products: [],
+    support: [],
+  });
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'orders' | 'products'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'restaurants' | 'menu' | 'promotions' | 'users' | 'support'>('orders');
 
   const fetchOrders = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/order');
-      const data = await res.json();
+      const [ordersRes, overviewRes] = await Promise.all([
+        fetch('/api/order'),
+        fetch('/api/admin/overview'),
+      ]);
+      const data = await ordersRes.json();
+      const overviewData = (await overviewRes.json()) as AdminOverviewResponse;
       setOrders(data.orders || []);
+      setOverview(overviewData);
     } catch {
       setOrders([]);
     }
@@ -59,6 +82,15 @@ export default function AdminDashboard() {
     pending: orders.filter((o) => o.order_status === 'pending').length,
     delivered: orders.filter((o) => o.order_status === 'delivered').length,
     revenue: orders.filter((o) => o.order_status !== 'cancelled').reduce((s, o) => s + o.total_amount, 0),
+  };
+
+  const updateOrderStatus = async (orderId: string, nextStatus: string) => {
+    await fetch('/api/admin/order-status', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderId, nextStatus }),
+    });
+    await fetchOrders();
   };
 
   return (
@@ -85,9 +117,9 @@ export default function AdminDashboard() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {[
             { icon: ShoppingBag, label: 'Total Orders', value: stats.total, color: '#c0392b' },
-            { icon: Clock, label: 'Pending', value: stats.pending, color: '#f39c12' },
-            { icon: CheckCircle, label: 'Delivered', value: stats.delivered, color: '#27ae60' },
-            { icon: TrendingUp, label: 'Revenue', value: `₹${stats.revenue}`, color: '#e67e22' },
+            { icon: Clock, label: 'Open Orders', value: overview.metrics.openOrders || stats.pending, color: '#f39c12' },
+            { icon: Store, label: 'Restaurants', value: overview.metrics.restaurants, color: '#27ae60' },
+            { icon: TrendingUp, label: 'Revenue', value: `₹${overview.metrics.revenue || stats.revenue}`, color: '#e67e22' },
           ].map(({ icon: Icon, label, value, color }) => (
             <motion.div
               key={label}
@@ -109,19 +141,26 @@ export default function AdminDashboard() {
 
         {/* Tabs */}
         <div className="flex gap-2 mb-6">
-          {(['orders', 'products'] as const).map((tab) => (
+          {([
+            { key: 'orders', label: 'Orders', icon: Package },
+            { key: 'restaurants', label: 'Restaurants', icon: Store },
+            { key: 'menu', label: 'Menu', icon: ShoppingBag },
+            { key: 'promotions', label: 'Promotions', icon: Megaphone },
+            { key: 'users', label: 'Users', icon: Users },
+            { key: 'support', label: 'Support', icon: LifeBuoy },
+          ] as const).map((tab) => (
             <button
-              key={tab}
-              id={`admin-tab-${tab}`}
-              onClick={() => setActiveTab(tab)}
+              key={tab.key}
+              id={`admin-tab-${tab.key}`}
+              onClick={() => setActiveTab(tab.key)}
               className="px-5 py-2 rounded-full text-sm font-medium capitalize transition-all"
               style={{
-                background: activeTab === tab ? 'linear-gradient(135deg, #c0392b, #e67e22)' : 'rgba(255,255,255,0.06)',
-                color: activeTab === tab ? '#fff' : 'rgba(253,246,236,0.6)',
-                border: activeTab === tab ? 'none' : '1px solid rgba(255,255,255,0.08)',
+                background: activeTab === tab.key ? 'linear-gradient(135deg, #c0392b, #e67e22)' : 'rgba(255,255,255,0.06)',
+                color: activeTab === tab.key ? '#fff' : 'rgba(253,246,236,0.6)',
+                border: activeTab === tab.key ? 'none' : '1px solid rgba(255,255,255,0.08)',
               }}
             >
-              {tab === 'orders' ? '📦 Orders' : '🍽️ Products'}
+              {tab.label}
             </button>
           ))}
         </div>
@@ -173,6 +212,17 @@ export default function AdminDashboard() {
                           <p className="text-xl font-bold text-orange-300">₹{order.total_amount}</p>
                           <p className="text-xs text-orange-100/40">{order.payment_method}</p>
                           <p className="text-xs text-orange-100/30">{new Date(order.created_at).toLocaleString('en-IN')}</p>
+                          <select
+                            value={order.order_status}
+                            onChange={(event) => void updateOrderStatus(order.id, event.target.value)}
+                            className="mt-2 rounded-lg border border-white/10 bg-white/8 px-2 py-1 text-xs text-white"
+                          >
+                            <option value="confirmed">confirmed</option>
+                            <option value="preparing">preparing</option>
+                            <option value="out_for_delivery">out_for_delivery</option>
+                            <option value="delivered">delivered</option>
+                            <option value="cancelled">cancelled</option>
+                          </select>
                         </div>
                       </div>
                       {order.order_items && order.order_items.length > 0 && (
@@ -192,17 +242,62 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* Products Tab placeholder */}
-        {activeTab === 'products' && (
-          <div className="text-center py-20 rounded-3xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-            <p className="text-5xl mb-4">🍽️</p>
-            <h3 className="text-lg font-bold text-orange-100 mb-2">Product Management</h3>
-            <p className="text-orange-100/50 text-sm max-w-sm mx-auto">
-              Connect your Supabase database to manage products, update prices, and control stock directly from here.
-            </p>
-            <div className="mt-6 text-xs text-orange-100/30">
-              Set <code className="text-orange-400">NEXT_PUBLIC_SUPABASE_URL</code> and <code className="text-orange-400">SUPABASE_SERVICE_ROLE_KEY</code> in your .env.local
-            </div>
+        {activeTab === 'restaurants' && (
+          <div className="grid gap-3">
+            {overview.restaurants.map((row) => (
+              <div key={String(row.id)} className="rounded-2xl border border-white/10 bg-white/4 px-4 py-4">
+                <p className="font-medium text-white">{String(row.name ?? row.id)}</p>
+                <p className="text-xs text-white/50">
+                  ETA {String(row.eta_min ?? '-') } min • Fee ₹{String(row.delivery_fee ?? '-')}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab === 'menu' && (
+          <div className="grid gap-3">
+            {overview.products.slice(0, 30).map((row) => (
+              <div key={String(row.id)} className="rounded-2xl border border-white/10 bg-white/4 px-4 py-4">
+                <p className="font-medium text-white">{String(row.name ?? row.id)}</p>
+                <p className="text-xs text-white/50">
+                  ₹{String(row.price_inr ?? row.price ?? '-')} • Restaurant {String(row.restaurant_id ?? '-')}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab === 'promotions' && (
+          <div className="rounded-3xl border border-white/10 bg-white/4 p-8 text-sm text-white/70">
+            <p>Promotions module placeholder: manage coupon campaigns, visibility windows, and restaurant-level offers.</p>
+            <p className="mt-2 text-white/45">Current recommended live offers: NEW50, FREEDEL, WEEKEND.</p>
+          </div>
+        )}
+
+        {activeTab === 'users' && (
+          <div className="rounded-3xl border border-white/10 bg-white/4 p-8 text-sm text-white/70">
+            <p>Users aggregate module placeholder: active users, repeat rate, and profile completion cohorts.</p>
+            <p className="mt-2 text-white/45">Implement via analytics events and Supabase user tables.</p>
+          </div>
+        )}
+
+        {activeTab === 'support' && (
+          <div className="grid gap-3">
+            {overview.support.length === 0 ? (
+              <div className="rounded-2xl border border-white/10 bg-white/4 px-4 py-4 text-sm text-white/60">
+                No active support queue right now.
+              </div>
+            ) : (
+              overview.support.map((row) => (
+                <div key={String(row.id)} className="rounded-2xl border border-white/10 bg-white/4 px-4 py-4">
+                  <p className="font-medium text-white">{String(row.customer_name ?? row.id)}</p>
+                  <p className="text-xs text-white/50">
+                    {String(row.order_status)} • {new Date(String(row.created_at)).toLocaleString('en-IN')}
+                  </p>
+                </div>
+              ))
+            )}
           </div>
         )}
       </div>

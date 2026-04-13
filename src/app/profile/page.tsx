@@ -1,191 +1,239 @@
 'use client';
 
-import { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { useCart } from '@/lib/store';
 import Link from 'next/link';
-import { ArrowLeft, User, MapPin, Clock, ChevronRight, Edit2, Star, Phone, LogOut, Package, Heart, Settings } from 'lucide-react';
-import { SHOP_INFO } from '@/lib/data';
+import { useMemo, useState } from 'react';
+import type { ComponentProps } from 'react';
+import { MapPin, Phone, UserRound } from 'lucide-react';
+import { useCart } from '@/lib/store';
+import { formatPrice } from '@/lib/format';
+import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
 export default function ProfilePage() {
-  const { userName, setUserName, address, setAddress, recentOrders, wishlist } = useCart();
-  const [editing, setEditing] = useState(false);
-  const [nameInput, setNameInput] = useState(userName);
-  const [editingAddr, setEditingAddr] = useState(false);
-  const [addrInput, setAddrInput] = useState({ area: address?.area || '', address: address?.address || '', label: address?.label || 'Home' });
+  const {
+    userName,
+    userPhone,
+    address,
+    recentOrders,
+    wishlist,
+    setUserName,
+    setUserPhone,
+    setAddress,
+  } = useCart();
+  const [draftName, setDraftName] = useState(userName);
+  const [draftPhone, setDraftPhone] = useState(userPhone);
+  const [draftArea, setDraftArea] = useState(address?.area ?? '');
+  const [draftAddress, setDraftAddress] = useState(address?.address ?? '');
+  const [draftLabel, setDraftLabel] = useState(address?.label ?? 'Home');
+  const [status, setStatus] = useState('');
+  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const completeness = Math.round(
+    ((userName ? 1 : 0) + (userPhone ? 1 : 0) + (address ? 1 : 0)) / 3 * 100,
+  );
 
   return (
-    <div className="min-h-screen pt-16 pb-24" style={{ background: '#07060f' }}>
-      {/* Header */}
-      <div className="sticky top-16 z-20 flex items-center gap-3 px-4 py-3"
-        style={{ background: 'rgba(7,6,15,0.97)', borderBottom: '1px solid rgba(255,255,255,0.06)', backdropFilter: 'blur(16px)' }}>
-        <Link href="/" className="p-2 rounded-xl hover:bg-white/10 transition-colors">
-          <ArrowLeft className="w-5 h-5 text-white/70" />
-        </Link>
-        <h1 className="font-black text-lg" style={{ color: '#FAFAFA' }}>My Profile</h1>
-        <Settings className="w-5 h-5 ml-auto" style={{ color: 'rgba(250,250,250,0.4)' }} />
-      </div>
-
-      <div className="max-w-lg mx-auto px-4 pt-4 space-y-4">
-
-        {/* Profile Card */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-          className="p-5 rounded-2xl" style={{ background: 'linear-gradient(135deg, #1a0a1a, #0f0e1a)', border: '1px solid rgba(255,107,107,0.2)' }}>
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl shrink-0"
-              style={{ background: 'linear-gradient(135deg,#FF6B6B,#FF8E53)' }}>
-              {userName ? userName[0].toUpperCase() : '👤'}
-            </div>
-            <div className="flex-1">
-              {editing ? (
-                <div className="flex gap-2">
-                  <input value={nameInput} onChange={e => setNameInput(e.target.value)}
-                    placeholder="Your name" className="swiggy-input text-sm flex-1" autoFocus />
-                  <button onClick={() => { setUserName(nameInput); setEditing(false); }}
-                    className="px-3 py-1 rounded-lg text-xs font-bold text-white"
-                    style={{ background: 'linear-gradient(135deg,#FF6B6B,#FF8E53)' }}>Save</button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <p className="font-black text-lg" style={{ color: '#FAFAFA' }}>{userName || 'Guest User'}</p>
-                  <button onClick={() => setEditing(true)} className="p-1 rounded-lg hover:bg-white/10">
-                    <Edit2 className="w-3.5 h-3.5" style={{ color: 'rgba(250,250,250,0.4)' }} />
-                  </button>
-                </div>
-              )}
-              <p className="text-sm mt-0.5" style={{ color: 'rgba(250,250,250,0.4)' }}>{SHOP_INFO.phone}</p>
-            </div>
+    <div className="app-page">
+      <div className="app-container grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+        <section className="space-y-5">
+          <div>
+            <p className="section-kicker">Profile</p>
+            <h1 className="mt-2 text-4xl font-semibold text-white">Customer details and recent orders.</h1>
+            <p className="mt-2 text-sm text-white/55">Profile completeness: {completeness}%</p>
           </div>
 
-          {/* Stats row */}
-          <div className="grid grid-cols-3 gap-3 mt-5">
-            {[
-              { val: recentOrders.length, label: 'Orders', icon: Package, color: '#FF6B6B' },
-              { val: wishlist.length, label: 'Saved', icon: Heart, color: '#FF8E53' },
-              { val: '4.9', label: 'Rating', icon: Star, color: '#FFC857' },
-            ].map(({ val, label, icon: Icon, color }) => (
-              <div key={label} className="text-center p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)' }}>
-                <Icon className="w-4 h-4 mx-auto mb-1" style={{ color }} />
-                <p className="font-black text-lg" style={{ color }}>{val}</p>
-                <p className="text-xs" style={{ color: 'rgba(250,250,250,0.4)' }}>{label}</p>
+          <div className="surface-card rounded-[32px] p-6">
+            <div className="flex items-center gap-4">
+              <div className="inline-flex h-16 w-16 items-center justify-center rounded-[24px] bg-[linear-gradient(135deg,#ff8a5b,#ff5d6c)] text-xl font-semibold text-white">
+                {(userName || 'G').slice(0, 1).toUpperCase()}
               </div>
-            ))}
-          </div>
-        </motion.div>
-
-        {/* Saved Address */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-          className="p-4 rounded-2xl" style={{ background: '#0f0e1a', border: '1px solid rgba(255,255,255,0.06)' }}>
-          <div className="flex items-center justify-between mb-3">
-            <p className="font-bold text-sm flex items-center gap-2" style={{ color: '#FAFAFA' }}>
-              <MapPin className="w-4 h-4 text-orange-400" /> Saved Address
-            </p>
-            <button onClick={() => setEditingAddr(!editingAddr)} className="text-xs font-semibold" style={{ color: '#FF6B6B' }}>
-              {editingAddr ? 'Cancel' : address ? 'Edit' : '+ Add'}
-            </button>
-          </div>
-          {editingAddr ? (
-            <div className="space-y-2">
-              <div className="flex gap-2">
-                {['Home', 'Work', 'Other'].map(l => (
-                  <button key={l} onClick={() => setAddrInput(a => ({ ...a, label: l }))}
-                    className="flex-1 py-1.5 rounded-lg text-xs font-bold transition-all"
-                    style={{ background: addrInput.label === l ? 'rgba(255,107,107,0.2)' : 'rgba(255,255,255,0.05)', color: addrInput.label === l ? '#FF6B6B' : 'rgba(250,250,250,0.5)', border: `1px solid ${addrInput.label === l ? '#FF6B6B' : 'rgba(255,255,255,0.08)'}` }}>
-                    {l === 'Home' ? '🏠' : l === 'Work' ? '💼' : '📍'} {l}
-                  </button>
-                ))}
+              <div>
+                <p className="text-xl font-semibold text-white">{userName || 'Guest customer'}</p>
+                <p className="mt-1 text-sm text-white/52">{userPhone || 'No phone saved yet'}</p>
               </div>
-              <input value={addrInput.area} onChange={e => setAddrInput(a => ({ ...a, area: e.target.value }))}
-                placeholder="Area / Sector" className="swiggy-input text-sm" />
-              <input value={addrInput.address} onChange={e => setAddrInput(a => ({ ...a, address: e.target.value }))}
-                placeholder="Full address, landmark..." className="swiggy-input text-sm" />
-              <button onClick={() => { setAddress(addrInput); setEditingAddr(false); }}
-                className="w-full py-2 rounded-xl text-sm font-bold text-white"
-                style={{ background: 'linear-gradient(135deg,#FF6B6B,#FF8E53)' }}>
-                Save Address
+            </div>
+
+            <div className="mt-6 grid gap-5">
+              <div>
+                <label htmlFor="profile-name" className="form-label">Name</label>
+                <input
+                  id="profile-name"
+                  value={draftName}
+                  onChange={(event) => setDraftName(event.target.value)}
+                  className="form-input"
+                />
+              </div>
+              <div>
+                <label htmlFor="profile-phone" className="form-label">Phone</label>
+                <input
+                  id="profile-phone"
+                  value={draftPhone}
+                  onChange={(event) => setDraftPhone(event.target.value)}
+                  className="form-input"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  setUserName(draftName);
+                  setUserPhone(draftPhone);
+                  setStatus('Saved locally.');
+                  const normalized = draftPhone.startsWith('+') ? draftPhone : `+${draftPhone.replace(/^\+?/, '')}`;
+                  if (supabase && normalized.length >= 10) {
+                    await supabase.auth.updateUser({
+                      phone: normalized,
+                      data: { full_name: draftName || undefined },
+                    });
+                    setStatus('Saved locally. Supabase profile sync requested.');
+                  }
+                }}
+                className="btn-primary w-fit"
+              >
+                Save profile
               </button>
             </div>
-          ) : address ? (
-            <div className="flex gap-3 p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)' }}>
-              <div>
-                <p className="text-xs font-bold px-2 py-0.5 rounded-full mb-1 w-fit" style={{ background: 'rgba(255,107,107,0.12)', color: '#FF6B6B' }}>
-                  {address.label === 'Home' ? '🏠' : address.label === 'Work' ? '💼' : '📍'} {address.label}
-                </p>
-                <p className="text-sm font-semibold" style={{ color: '#FAFAFA' }}>{address.area}</p>
-                <p className="text-xs mt-0.5" style={{ color: 'rgba(250,250,250,0.4)' }}>{address.address}</p>
+          </div>
+
+          <div className="surface-card rounded-[32px] p-6">
+            <h2 className="text-2xl font-semibold text-white">Saved address</h2>
+            <div className="mt-5 grid gap-5">
+              <div className="grid gap-5 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="profile-label" className="form-label">Label</label>
+                  <select
+                    id="profile-label"
+                    value={draftLabel}
+                    onChange={(event) => setDraftLabel(event.target.value)}
+                    className="form-input"
+                  >
+                    <option value="Home">Home</option>
+                    <option value="Work">Work</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="profile-area" className="form-label">Area</label>
+                  <input
+                    id="profile-area"
+                    value={draftArea}
+                    onChange={(event) => setDraftArea(event.target.value)}
+                    className="form-input"
+                    placeholder="Sector 18"
+                  />
+                </div>
               </div>
-            </div>
-          ) : (
-            <p className="text-sm text-center py-4" style={{ color: 'rgba(250,250,250,0.3)' }}>No address saved yet</p>
-          )}
-        </motion.div>
+              <div>
+                <label htmlFor="profile-address" className="form-label">Address</label>
+                <textarea
+                  id="profile-address"
+                  value={draftAddress}
+                  onChange={(event) => setDraftAddress(event.target.value)}
+                  className="form-textarea"
+                  placeholder="House, tower, landmark..."
+                />
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  setAddress({ label: draftLabel, area: draftArea, address: draftAddress });
+                  setStatus('Address saved locally.');
 
-        {/* Order History */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-          className="p-4 rounded-2xl" style={{ background: '#0f0e1a', border: '1px solid rgba(255,255,255,0.06)' }}>
-          <p className="font-bold text-sm mb-3 flex items-center gap-2" style={{ color: '#FAFAFA' }}>
-            <Clock className="w-4 h-4 text-orange-400" /> Order History
-          </p>
-          {recentOrders.length === 0 ? (
-            <div className="text-center py-6">
-              <p className="text-4xl mb-2">🛵</p>
-              <p className="text-sm" style={{ color: 'rgba(250,250,250,0.3)' }}>No orders yet. Place your first order!</p>
-              <Link href="/menu" className="inline-block mt-3 text-xs font-semibold btn-primary py-2 px-4">Order Now</Link>
+                  if (!supabase) {
+                    return;
+                  }
+
+                  const {
+                    data: { user },
+                  } = await supabase.auth.getUser();
+
+                  if (!user) {
+                    return;
+                  }
+
+                  await supabase.from('user_addresses').insert({
+                    user_id: user.id,
+                    label: draftLabel,
+                    area: draftArea,
+                    formatted_address: draftAddress,
+                    place_id: address?.placeId ?? null,
+                    latitude: address?.lat ?? null,
+                    longitude: address?.lng ?? null,
+                  });
+
+                  setStatus('Address saved to Supabase.');
+                }}
+                className="btn-primary w-fit"
+              >
+                Save address
+              </button>
+              {status && <p className="text-sm text-white/55">{status}</p>}
             </div>
-          ) : (
-            <div className="space-y-3">
-              {recentOrders.map((order, i) => (
-                <motion.div key={order.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.05 }}
-                  className="p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.04)' }}>
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <p className="text-xs font-bold" style={{ color: 'rgba(250,250,250,0.4)' }}>Order #{order.id}</p>
-                      <p className="text-xs mt-0.5" style={{ color: 'rgba(250,250,250,0.3)' }}>{order.date}</p>
+          </div>
+        </section>
+
+        <section className="space-y-5">
+          <div className="grid gap-4 sm:grid-cols-3">
+            {[
+              { icon: UserRound, label: 'Saved items', value: wishlist.length },
+              { icon: ShoppingBagIcon, label: 'Recent orders', value: recentOrders.length },
+              { icon: MapPin, label: 'Addresses', value: address ? 1 : 0 },
+            ].map((item) => {
+              const Icon = item.icon;
+              return (
+                <div key={item.label} className="surface-card rounded-[28px] p-5">
+                  <Icon className="h-5 w-5 text-[#ff8a5b]" />
+                  <p className="mt-4 text-3xl font-semibold text-white">{item.value}</p>
+                  <p className="mt-2 text-sm text-white/48">{item.label}</p>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="surface-card rounded-[32px] p-6">
+            <h2 className="text-2xl font-semibold text-white">Recent orders</h2>
+            <div className="mt-5 space-y-4">
+              {recentOrders.length === 0 ? (
+                <div className="rounded-[24px] border border-white/8 bg-white/4 px-4 py-6 text-sm text-white/55">
+                  No orders yet. Place one from the updated menu to see the tracking flow.
+                </div>
+              ) : (
+                recentOrders.map((order) => (
+                  <Link key={order.id} href={`/order/${order.id}`} className="block rounded-[24px] border border-white/8 bg-white/4 p-4 transition-colors hover:border-white/16">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="font-medium text-white">Order #{order.id}</p>
+                        <p className="mt-1 text-sm text-white/48">{new Date(order.createdAt).toLocaleString('en-IN')}</p>
+                      </div>
+                      <span className="rounded-full border border-white/8 px-3 py-1 text-xs text-white/62">
+                        {order.orderStatus}
+                      </span>
                     </div>
-                    <span className="text-xs font-bold px-2 py-0.5 rounded-full"
-                      style={{
-                        background: order.status === 'delivered' ? 'rgba(107,203,119,0.12)' : order.status === 'cancelled' ? 'rgba(255,107,107,0.12)' : 'rgba(255,200,87,0.12)',
-                        color: order.status === 'delivered' ? '#6BCB77' : order.status === 'cancelled' ? '#FF6B6B' : '#FFC857',
-                      }}>
-                      {order.status === 'delivered' ? '✅ Delivered' : order.status === 'cancelled' ? '❌ Cancelled' : '🔄 Processing'}
-                    </span>
-                  </div>
-                  <p className="text-xs mb-2" style={{ color: 'rgba(250,250,250,0.5)' }}>
-                    {order.items.map(it => `${it.name} ×${it.quantity}`).join(', ')}
-                  </p>
-                  <div className="flex items-center justify-between">
-                    <span className="font-black text-sm" style={{ color: '#FF6B6B' }}>₹{order.total}</span>
-                    <Link href="/menu" className="text-xs font-semibold" style={{ color: '#4ECDC4' }}>Reorder →</Link>
-                  </div>
-                </motion.div>
-              ))}
+                    <p className="mt-3 text-sm leading-7 text-white/55">
+                      {order.items.map((item) => `${item.name} x ${item.quantity}`).join(', ')}
+                    </p>
+                    <p className="mt-3 text-sm font-medium text-white">{formatPrice(order.totalAmount)}</p>
+                    <div className="mt-3 flex gap-2">
+                      <Link href={`/order/${order.id}`} className="rounded-full border border-white/12 px-3 py-1 text-xs text-white/70">
+                        Track
+                      </Link>
+                      <Link href="/menu" className="rounded-full border border-white/12 px-3 py-1 text-xs text-white/70">
+                        Reorder similar
+                      </Link>
+                    </div>
+                  </Link>
+                ))
+              )}
             </div>
-          )}
-        </motion.div>
-
-        {/* Quick Links */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-          className="rounded-2xl overflow-hidden" style={{ background: '#0f0e1a', border: '1px solid rgba(255,255,255,0.06)' }}>
-          {[
-            { icon: '📱', label: 'Contact on WhatsApp', href: `https://wa.me/${SHOP_INFO.whatsapp}`, ext: true },
-            { icon: '🌐', label: 'Visit Website', href: '/', ext: false },
-            { icon: '📋', label: 'Menu', href: '/menu', ext: false },
-            { icon: '❤️', label: 'Saved Items', href: '/wishlist', ext: false },
-          ].map(({ icon, label, href, ext }) => (
-            <a key={label} href={href} target={ext ? '_blank' : undefined} rel={ext ? 'noopener noreferrer' : undefined}
-              className="flex items-center gap-3 px-4 py-3.5 hover:bg-white/5 transition-colors border-b"
-              style={{ borderColor: 'rgba(255,255,255,0.04)' }}>
-              <span className="text-xl w-8 text-center">{icon}</span>
-              <span className="text-sm font-medium flex-1" style={{ color: 'rgba(250,250,250,0.7)' }}>{label}</span>
-              <ChevronRight className="w-4 h-4" style={{ color: 'rgba(250,250,250,0.25)' }} />
-            </a>
-          ))}
-        </motion.div>
-
-        <p className="text-center text-xs pb-4" style={{ color: 'rgba(250,250,250,0.2)' }}>
-          Meghna's Kitchen v1.0 · Made with ❤️
-        </p>
+          </div>
+        </section>
       </div>
     </div>
+  );
+}
+
+function ShoppingBagIcon(props: ComponentProps<'svg'>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...props}>
+      <path d="M6 8h12l-1 11H7L6 8Z" />
+      <path d="M9 9V7a3 3 0 1 1 6 0v2" />
+    </svg>
   );
 }

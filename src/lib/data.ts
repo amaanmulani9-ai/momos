@@ -1,5 +1,86 @@
 export type SpiceLevel = 'mild' | 'medium' | 'hot' | 'extra-hot';
 
+/** Stable IDs used in Supabase seed migration `supabase/migrations/20250413120000_marketplace.sql`. */
+export const RESTAURANT_IDS = {
+  MOMOS: 'meghna-momos',
+  WOK: 'wok-express',
+  SLICE: 'slice-run',
+} as const;
+
+export interface Restaurant {
+  id: string;
+  slug: string;
+  name: string;
+  tagline: string;
+  heroImageUrl: string;
+  cuisines: string[];
+  rating: number;
+  etaMin: number;
+  deliveryFee: number;
+  freeDeliveryAbove: number;
+  isOpen: boolean;
+  sortOrder: number;
+}
+
+export const RESTAURANTS: Restaurant[] = [
+  {
+    id: RESTAURANT_IDS.MOMOS,
+    slug: 'meghna-momos',
+    name: "Meghna's Momos",
+    tagline: 'Steam, fried & kurkure favourites',
+    heroImageUrl: 'https://images.unsplash.com/photo-1496116218417-1a781b1c416c?w=800&q=80',
+    cuisines: ['Momos', 'Indian', 'Healthy'],
+    rating: 4.8,
+    etaMin: 28,
+    deliveryFee: 30,
+    freeDeliveryAbove: 300,
+    isOpen: true,
+    sortOrder: 0,
+  },
+  {
+    id: RESTAURANT_IDS.WOK,
+    slug: 'wok-express',
+    name: 'Wok Express',
+    tagline: 'Asian bowls, noodles & pasta',
+    heroImageUrl: 'https://images.unsplash.com/photo-1582878826629-29b7ad1cdc43?w=800&q=80',
+    cuisines: ['Chinese', 'Asian', 'Pasta'],
+    rating: 4.5,
+    etaMin: 32,
+    deliveryFee: 40,
+    freeDeliveryAbove: 350,
+    isOpen: true,
+    sortOrder: 1,
+  },
+  {
+    id: RESTAURANT_IDS.SLICE,
+    slug: 'slice-run',
+    name: 'Slice Run',
+    tagline: 'Pizza & fast food',
+    heroImageUrl: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&q=80',
+    cuisines: ['Pizza', 'Fast food'],
+    rating: 4.3,
+    etaMin: 35,
+    deliveryFee: 45,
+    freeDeliveryAbove: 400,
+    isOpen: true,
+    sortOrder: 2,
+  },
+];
+
+export function restaurantIdForProductCategory(categoryId: string): string {
+  if (['chinese', 'asian', 'pasta'].includes(categoryId)) {
+    return RESTAURANT_IDS.WOK;
+  }
+  if (['pizza', 'fastfood'].includes(categoryId)) {
+    return RESTAURANT_IDS.SLICE;
+  }
+  return RESTAURANT_IDS.MOMOS;
+}
+
+export function getRestaurantById(id: string): Restaurant | undefined {
+  return RESTAURANTS.find((r) => r.id === id);
+}
+
 export interface Product {
   id: string;
   name: string;

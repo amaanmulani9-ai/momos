@@ -1,27 +1,32 @@
 'use client';
 
+import { usePathname } from 'next/navigation';
 import { motion } from 'motion/react';
 import { MessageCircle } from 'lucide-react';
-import { SHOP_INFO } from '@/lib/data';
+import { fallbackSettings } from '@/lib/customer-data';
 
 export default function WhatsAppButton() {
+  const pathname = usePathname();
+
+  if (pathname.startsWith('/admin') || pathname.startsWith('/checkout') || pathname.startsWith('/order') || pathname.startsWith('/contact')) {
+    return null;
+  }
+
   return (
     <motion.a
-      href={`https://wa.me/${SHOP_INFO.whatsapp}?text=${encodeURIComponent("Hi! I'd like to order some momos 🥟")}`}
+      href={`https://wa.me/${fallbackSettings.whatsapp}?text=${encodeURIComponent("Hello, I want to place an order.")}`}
       target="_blank"
       rel="noopener noreferrer"
-      id="whatsapp-float-btn"
-      className="fixed bottom-20 right-4 z-40 flex items-center gap-2 px-4 py-3 rounded-full shadow-2xl text-white font-semibold text-sm"
-      style={{ background: 'linear-gradient(135deg, #25D366, #128C7E)', boxShadow: '0 8px 32px rgba(37,211,102,0.4)' }}
-      initial={{ scale: 0, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      transition={{ delay: 1.5, type: 'spring', stiffness: 200 }}
-      whileHover={{ scale: 1.08 }}
-      whileTap={{ scale: 0.95 }}
-      aria-label="Order on WhatsApp"
+      className="fixed bottom-[96px] right-4 z-30 inline-flex items-center gap-2 rounded-full border border-[#32d272]/30 bg-[linear-gradient(135deg,#1fbe60,#139d53)] px-4 py-3 text-sm font-semibold text-white shadow-[0_18px_40px_rgba(20,157,83,0.35)] lg:bottom-6"
+      initial={{ opacity: 0, scale: 0.92, y: 10 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      transition={{ delay: 0.3, duration: 0.35 }}
+      whileHover={{ scale: 1.03 }}
+      whileTap={{ scale: 0.98 }}
     >
-      <MessageCircle className="w-5 h-5" fill="white" />
-      <span className="hidden sm:inline">Order on WhatsApp</span>
+      <MessageCircle className="h-4 w-4" />
+      <span className="hidden sm:inline">WhatsApp order</span>
     </motion.a>
   );
 }
+
