@@ -215,7 +215,16 @@ export default function CheckoutPage() {
 
         const Rzp = (window as unknown as { Razorpay: new (opts: Record<string, unknown>) => { open: () => void } }).Razorpay;
         const orderId = orderJson.orderId;
-        const snapshot = buildLocalOrderRecord(orderJson, 'RAZORPAY', 'pending');
+        const snapshot = buildLocalOrderRecord(
+          {
+            orderId,
+            status: orderJson.status ?? 'confirmed',
+            persisted: Boolean(orderJson.persisted),
+            whatsappUrl: orderJson.whatsappUrl,
+          },
+          'RAZORPAY',
+          'pending',
+        );
 
         const options: Record<string, unknown> = {
           key: rzJson.keyId,
@@ -305,7 +314,16 @@ export default function CheckoutPage() {
         throw new Error(payload.message || 'Unable to create order.');
       }
 
-      const orderRecord = buildLocalOrderRecord(payload, form.paymentMethod, 'pending');
+      const orderRecord = buildLocalOrderRecord(
+        {
+          orderId: payload.orderId,
+          status: payload.status ?? 'confirmed',
+          persisted: Boolean(payload.persisted),
+          whatsappUrl: payload.whatsappUrl,
+        },
+        form.paymentMethod,
+        'pending',
+      );
 
       setUserName(form.name);
       setUserPhone(form.phone);

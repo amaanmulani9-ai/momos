@@ -1,16 +1,15 @@
 import { NextResponse } from 'next/server';
 import { mapRemoteOrderRow } from '@/lib/map-remote-order';
+import { getServiceSupabaseEnv } from '@/lib/supabase/config';
 
 async function getServiceSupabaseClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !serviceRoleKey) {
+  const config = getServiceSupabaseEnv();
+  if (!config) {
     return null;
   }
 
   const { createClient } = await import('@supabase/supabase-js');
-  return createClient(supabaseUrl, serviceRoleKey);
+  return createClient(config.url, config.key);
 }
 
 interface OrderRouteProps {

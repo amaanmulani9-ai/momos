@@ -1,13 +1,17 @@
-'use client';
-
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 import { CheckCircle2, MessageCircle } from 'lucide-react';
 import { fallbackSettings } from '@/lib/customer-data';
 
-export default function OrderSuccessPage() {
-  const searchParams = useSearchParams();
-  const orderId = searchParams.get('orderId');
+export default async function OrderSuccessPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ orderId?: string | string[] }>;
+}) {
+  const resolvedSearchParams = await searchParams;
+  const orderId =
+    typeof resolvedSearchParams.orderId === 'string'
+      ? resolvedSearchParams.orderId
+      : resolvedSearchParams.orderId?.[0];
 
   return (
     <div className="app-page">
@@ -52,4 +56,3 @@ export default function OrderSuccessPage() {
     </div>
   );
 }
-

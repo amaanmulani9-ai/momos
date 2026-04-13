@@ -2,9 +2,9 @@
 
 import Image from 'next/image';
 import { motion } from 'motion/react';
-import { Plus, Star, Flame } from 'lucide-react';
+import { Plus, Flame } from 'lucide-react';
 import { useCart } from '@/lib/store';
-import type { Product } from '@/lib/data';
+import type { ProductDetail } from '@/lib/customer-data';
 
 const SPICE_COLORS: Record<string, string> = {
   mild: '#27ae60',
@@ -21,7 +21,7 @@ const SPICE_LABELS: Record<string, string> = {
 };
 
 interface ProductCardProps {
-  product: Product;
+  product: ProductDetail;
   index?: number;
 }
 

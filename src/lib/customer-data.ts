@@ -8,6 +8,7 @@ import {
   type Restaurant,
   type SpiceLevel,
 } from '@/lib/data';
+import { getPublicSupabaseEnv } from '@/lib/supabase/config';
 
 export type { SpiceLevel };
 
@@ -289,15 +290,13 @@ function mapSupabaseProduct(record: Record<string, unknown>): ProductDetail {
 }
 
 async function getPublicSupabaseClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
+  const config = getPublicSupabaseEnv();
+  if (!config) {
     return null;
   }
 
   const { createClient } = await import('@supabase/supabase-js');
-  return createClient(supabaseUrl, supabaseAnonKey);
+  return createClient(config.url, config.key);
 }
 
 export async function getRestaurants(): Promise<RestaurantSummary[]> {
@@ -523,4 +522,3 @@ export async function getReviews(): Promise<ReviewRecord[]> {
     return fallbackReviews;
   }
 }
-

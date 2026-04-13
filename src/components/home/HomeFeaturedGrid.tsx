@@ -3,9 +3,9 @@
 import { motion } from 'motion/react';
 import Image from 'next/image';
 import { useCart } from '@/lib/store';
-import { type Product } from '@/lib/data';
+import { type ProductDetail } from '@/lib/customer-data';
 
-function HomeQtyCounter({ product, qty }: { product: Product; qty: number }) {
+function HomeQtyCounter({ product, qty }: { product: ProductDetail; qty: number }) {
   const { addItem, updateQuantity, removeItem } = useCart();
 
   return (
@@ -17,7 +17,7 @@ function HomeQtyCounter({ product, qty }: { product: Product; qty: number }) {
   );
 }
 
-function HomeProductCard({ product }: { product: Product }) {
+function HomeProductCard({ product }: { product: ProductDetail }) {
   const { addItem, items } = useCart();
   const qty = items.find((entry) => entry.product.id === product.id)?.quantity || 0;
 
@@ -79,7 +79,7 @@ function HomeProductCard({ product }: { product: Product }) {
   );
 }
 
-export default function HomeFeaturedGrid({ products }: { products: Product[] }) {
+export default function HomeFeaturedGrid({ products }: { products: ProductDetail[] }) {
   return (
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
       {products.map((product) => (
